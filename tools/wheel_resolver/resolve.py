@@ -37,45 +37,60 @@ def main():
     are maybe cross-compiling for.
     """
     parser = argparse.ArgumentParser()
+    parser.add_argument("--package", type=str, help="the package to resolve")
     parser.add_argument(
-            '--package',
-            type=str,
-            help='the package to resolve')
+        "--version", type=str, help="the version of the package to be resolved"
+    )
     parser.add_argument(
-            '--version',
-            type=str,
-            help='the version of the package to be resolved')
+        "--arch", nargs="*", type=str, default=[], help="specify architecture"
+    )
     parser.add_argument(
-            '--arch',
-            nargs="*",
-            type=str,
-            default=[],
-            help='specify architecture')
+        "--urls",
+        nargs="*",
+        type=str,
+        default=[],
+        help="URLs to try before looking in wheel index",
+    )
     parser.add_argument(
-            '--urls',
-            nargs="*",
-            type=str,
-            default=[],
-            help='URLs to try before looking in wheel index')
+        "--log-level",
+        default=logging.INFO,
+        type=lambda x: getattr(logging, x),
+        help="Set logging level.",
+    )
 
     args = parser.parse_args()
+    logging.basicConfig(level=args.log_level)
 
     # If any URLs were passed, try them first before looking in the wheel index
     if args.urls:
         for url in args.urls:
-            if try_download(url):
+            result = try_download(url)
+            logging.info("trying download of %r: %s", url, result)
+            if result:
                 return
 
     # Fetch all available wheel urls from index
     urls = tg.get_download_urls(args.package, args.version)
+    logging.debug(
+        "found the following URLs for %r at %s: %r", args.package, args.version, urls
+    )
     if urls is None:
-        logging.critical("No matching urls found in index")
+        logging.critical("no matching URLs for %r at %s", args.package, args.version)
         sys.exit(1)
 
     result = tg.get_url(urls, args.arch)
+    logging.debug(
+        "found the following URL for %r at %s compatible with %s: %r",
+        args.package,
+        args.version,
+        args.arch,
+        result,
+    )
 
     if result is not None:
-        if try_download(result):
+        success = try_download(result)
+        logging.info("trying download of %r: %s", url, success)
+        if success:
             return
 
     logging.critical("Found %s URLs but none are compatible", len(urls))
